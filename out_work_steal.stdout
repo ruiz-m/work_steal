@@ -1,0 +1,35 @@
+2
+process thr
+Plus
+MODE SYN
+SYNTH
+SYNTH PLUS
+process thr
+Int
+MODE SYN
+SYNTH
+SYNTH END INT
+End
+Int
+New current
+Int
+process thr
+Int
+MODE SYN
+SYNTH
+SYNTH END INT
+End
+Int
+New current
+Plus
+process thr
+Plus
+MODE PLUS
+End
+Plus
+deleting thr
+deleting thr
+Yabo
+Int
+deleting thr
+Deleting plus
