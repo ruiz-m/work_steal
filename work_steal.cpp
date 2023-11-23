@@ -200,7 +200,7 @@ bool Thr::depEmpty()
 	return dep.empty();
 }
 
-static int num_threads;
+static int num_thr;
 static int count = 0;
 
 class Proc
@@ -345,17 +345,21 @@ void Proc::stall_thr()
 
 void Proc::work_steal()
 {
+	std::cout << id << " work stealing\n"; 
 	int vict;
 	do
 	{
-		vict = rand() % num_threads;
-		vict = (vict == num_threads ? (vict+1)%num_threads : vict);	
+		vict = rand() % num_thr;
+		vict = (vict == num_thr ? (vict+1)%num_thr : vict);
 	} while((*pool)[vict].empty() && count != 0);
 	
 	if(count != 0)
 	{
-		Thr *thr = dq_pop_back(vict);
-		current = thr;
+		#pragma omp critical
+		{
+			std::cout << id << " work stole\n"; 
+			//current = dq_pop_back(vict);
+		}
 	}
 }
 
@@ -409,31 +413,37 @@ void Proc::synth_plus(Typ ty1, Typ ty2)
 
 int main(int argc, char **argv)
 {
-	int num_threads = omp_get_max_threads();
-	std::vector<std::deque<Thr*>> pool(num_threads);
-	std::cout << num_threads << "\n";
+	num_thr = omp_get_max_threads();
+	std::vector<std::deque<Thr*>> pool(num_thr);
+	std::cout << num_thr << "\n";
 	
-	Proc p = Proc(0, &pool);
-	Exp *e1 = new Exp(Exp_cl::Int);
-	Exp *e2 = new Exp(Exp_cl::Int);
-	Exp *pl = new Plus(e1, e2);
-	Thr* thr = p.spawn_thr(pl, Mode(Mode_cl::Syn, Typ::None));
-	p.set_current(thr);
-	p.process_thr();
-	
-	std::cout << "Yabo\n";
-	printTyp(thr->getRes());
-	delete thr;
-	delete pl;
-	/*#pragma omp parallel shared(pool)
+	bool began = false;
+	#pragma omp parallel shared(pool, began)
 	{
 		int id = omp_get_thread_num();
 		std::cout << id << "\n";
 
+		Proc p = Proc(id, &pool);
 		if(id == 0)
 		{
-
+			Exp *e1 = new Exp(Exp_cl::Int);
+			Exp *e2 = new Exp(Exp_cl::Int);
+			Exp *pl = new Plus(e1, e2);
+			Thr* thr = p.spawn_thr(pl, Mode(Mode_cl::Syn, Typ::None));
+			p.set_current(thr);
+			began = true;
+			p.process_thr();
+			
+			std::cout << "Yabo\n";
+			printTyp(thr->getRes());
+			delete thr;
+			delete pl;
 		}
-	}*/
+		else
+		{
+			while(!began) {}
+			p.work_steal();
+		}
+	}
 	return 0;
 }

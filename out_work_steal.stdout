@@ -1,10 +1,13 @@
 2
+0
 process thr
 Plus
 MODE SYN
 SYNTH
 SYNTH PLUS
-process thr
+1process thr
+
+1 work stealing
 Int
 MODE SYN
 SYNTH
@@ -25,6 +28,7 @@ Plus
 process thr
 Plus
 MODE PLUS
+1 work stole
 End
 Plus
 deleting thr
