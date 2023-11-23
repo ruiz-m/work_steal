@@ -200,6 +200,9 @@ bool Thr::depEmpty()
 	return dep.empty();
 }
 
+static int num_threads;
+static int count = 0;
+
 class Proc
 {
 	private:
@@ -211,13 +214,14 @@ class Proc
 		Proc(int id, std::vector<std::deque<Thr*>> *pool) : id(id), pool(pool), current(nullptr) {}
 
 		void set_current(Thr *thr);
-		void dq_push_back(Thr *thr);
-		Thr *dq_pop_back();
+		void dq_push_back(int i, Thr *thr);
+		Thr *dq_pop_back(int i);
 		void process_thr();
 		Thr *spawn_thr(Exp *ex, Mode m);
-		//Thr *join_thr(std::vector<Thr*> v, Mode m);
+		void join_thr(std::vector<Thr*> &v, Mode m);
 		void end_thr(Typ res);
 		void stall_thr();
+		void work_steal();
 		
 		void synth(Exp *exp);
 		void synth_plus(Typ ty1, Typ ty2);
@@ -228,40 +232,33 @@ void Proc::set_current(Thr *thr)
 	current = thr;
 }
 
-void Proc::dq_push_back(Thr *thr)
+void Proc::dq_push_back(int i, Thr *thr)
 {
-	(*pool)[id].push_back(thr);
+	(*pool)[i].push_back(thr);
 }
 
-Thr *Proc::dq_pop_back()
+Thr *Proc::dq_pop_back(int i)
 {
-	Thr *t = (*pool)[id].back();
-	(*pool)[id].pop_back();
+	Thr *t = (*pool)[i].back();
+	(*pool)[i].pop_back();
 	return t;
 }
 
-//static int co = 0;
 
 void Proc::process_thr()
 {
 	std::cout << "process thr\n";
 	current->getExp()->printCl();
 	Mode m = current->getMode();
-	/*if(co < 3)
-	{
-		++co;
-	}
-	else
-	{
-		exit(1);
-	}*/
 
 	switch(m.cl)
 	{
 		case Mode_cl::Syn:
+		{
 			std::cout << "MODE SYN\n";
 			synth(current->getExp());
 			break;
+		}
 		case Mode_cl::Plus:
 		{
 			std::cout << "MODE PLUS\n";
@@ -275,55 +272,89 @@ void Proc::process_thr()
 			else
 			{
 				stall_thr();
+				process_thr();
 			}
 			break;
 		}
 		default:
+		{
 			std::cout << "Error\n";
 			//exit(1);
 			break;
+		}
 	}
 }
 
 Thr *Proc::spawn_thr(Exp *ex, Mode m)
 {
+	++count;
 	return new Thr(ex, m);
 }
 
-/*Thr *Proc::join_thr(std::vector<Thr*> &v, Mode m)
+void Proc::join_thr(std::vector<Thr*> &v, Mode m)
 {
-	return new Thr(v, m);
-}*/
+	current->setDep(v);
+	current->setMode(m);
+	#pragma critical
+	{
+		dq_push_back(id, current);
+		dq_push_back(id, v[1]);
+	}
+	current = v[0];
+}
 
 void Proc::end_thr(Typ ty)
 {
+	--count;
 	std::cout << "End\n";
 	current->getExp()->printCl();
 	current->setRes(ty);
 	current->setDone(true);
-	if((*pool)[id].empty())
+	#pragma omp critical
 	{
-		//work steal
-	}
-	else
-	{
-		current = dq_pop_back();
-		std::cout << "New current\n";
-		current->getExp()->printCl();
-		process_thr();
+		if((*pool)[id].empty() && count != 0)
+		{
+			work_steal();
+		}
+		else if(count != 0)
+		{
+			current = dq_pop_back(id);
+			std::cout << "New current\n";
+			current->getExp()->printCl();
+		}
 	}
 }
 
 void Proc::stall_thr()
-{	
-	if((*pool)[id].empty())
-	{
-		//work steal
+{
+	#pragma omp critical
+	{	
+		if((*pool)[id].empty() && count != 0)
+		{
+			dq_push_back(id, current);
+			work_steal();
+		}
+		else if(count != 0)
+		{
+			Thr *thr = dq_pop_back(id);
+			dq_push_back(id, current);
+			current = thr;
+		}
 	}
-	else
+}
+
+void Proc::work_steal()
+{
+	int vict;
+	do
 	{
-		Thr *thr = dq_pop_back();
-		dq_push_back(current);
+		vict = rand() % num_threads;
+		vict = (vict == num_threads ? (vict+1)%num_threads : vict);	
+	} while((*pool)[vict].empty() && count != 0);
+	
+	if(count != 0)
+	{
+		Thr *thr = dq_pop_back(vict);
 		current = thr;
 	}
 }
@@ -334,12 +365,18 @@ void Proc::synth(Exp *exp)
 	switch(exp->getCl())
 	{
 		case Exp_cl::Bool:
+		{
 		        end_thr(Typ::Bool);
+			process_thr();
 			break;
+		}
 		case Exp_cl::Int:
+		{
 			std::cout << "SYNTH END INT\n";
 			end_thr(Typ::Int);
+			process_thr();
 			break;
+		}
 		case Exp_cl::Plus:
 		{
 			std::cout << "SYNTH PLUS\n";
@@ -347,12 +384,7 @@ void Proc::synth(Exp *exp)
 			Thr *thr1 = spawn_thr(ex->getE1(), Mode(Mode_cl::Syn, Typ::None));
 			Thr *thr2 = spawn_thr(ex->getE2(), Mode(Mode_cl::Syn, Typ::None));
 			std::vector<Thr*> v = {thr1, thr2};
-			current->setDep(v);
-			current->setMode(Mode(Mode_cl::Plus, Typ::None));
-			Thr *thr3 = current;
-			current = thr1;
-			dq_push_back(thr3);
-			dq_push_back(thr2);
+			join_thr(v, Mode(Mode_cl::Plus, Typ::None));
 			process_thr();
 			break;
 		}
@@ -372,20 +404,20 @@ void Proc::synth_plus(Typ ty1, Typ ty2)
 	else
 	{
 		end_thr(Typ::None);
-	}	
+	}
 }
 
 int main(int argc, char **argv)
 {
-	int num = omp_get_max_threads();
-	std::vector<std::deque<Thr*>> pool(num);
-	std::cout << num << "\n";
+	int num_threads = omp_get_max_threads();
+	std::vector<std::deque<Thr*>> pool(num_threads);
+	std::cout << num_threads << "\n";
 	
 	Proc p = Proc(0, &pool);
 	Exp *e1 = new Exp(Exp_cl::Int);
 	Exp *e2 = new Exp(Exp_cl::Int);
 	Exp *pl = new Plus(e1, e2);
-	Thr* thr = new Thr(pl, Mode(Mode_cl::Syn, Typ::None));
+	Thr* thr = p.spawn_thr(pl, Mode(Mode_cl::Syn, Typ::None));
 	p.set_current(thr);
 	p.process_thr();
 	
