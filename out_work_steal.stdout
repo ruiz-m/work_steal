@@ -1,38 +1,14 @@
 2
+1
 0
 0 process thr
 Plus
 MODE SYN
 SYNTH
 SYNTH PLUS
-10 process thr
-Int
-
-MODE SYN
 1 work stealing with count=3
-SYNTH
-SYNTH END INT
-End
-Int
-New current
-Int
-0 process thr
-Int
-MODE SYN
-SYNTH
-SYNTH END INT
-End
-Int
-New current
-Plus
-0 process thr
+1 work stole
+1 process thr
 Plus
 MODE PLUS
-End
-Plus
-deleting thr
-deleting thr
-Yabo
-Int
-deleting thr
-Deleting plus
+time to work steal again

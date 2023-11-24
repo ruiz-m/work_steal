@@ -2,6 +2,7 @@
 #include <omp.h>
 #include <deque>
 #include <vector>
+#include <unistd.h>
 
 enum struct Exp_cl
 {
@@ -41,7 +42,7 @@ void Exp::printCl()
 			std::cout << "Plus\n";
 			break;
 		default:
-			std::cout << "Error\n";
+			std::cout << "printCl Error\n";
 			exit(1);
 	}
 }
@@ -95,7 +96,7 @@ void printTyp(Typ ty)
 			std::cout << "Int\n";
 			break;
 		default:
-			std::cout << "Error\n";
+			std::cout << "printTyp Error\n";
 			exit(1);
 	}
 }
@@ -217,12 +218,13 @@ class Proc
 		void set_current(Thr *thr);
 		void dq_push_back(int i, Thr *thr);
 		Thr *dq_pop_back(int i);
+		Thr *dq_pop_front(int i);
 		void process_thr();
 		Thr *spawn_thr(Exp *ex, Mode m);
 		void join_thr(std::vector<Thr*> &v, Mode m);
 		void end_thr(Typ res);
 		void stall_thr();
-		void work_steal();
+		bool work_steal();
 		
 		void synth(Exp *exp);
 		void synth_plus(Typ ty1, Typ ty2);
@@ -245,6 +247,12 @@ Thr *Proc::dq_pop_back(int i)
 	return t;
 }
 
+Thr *Proc::dq_pop_front(int i)
+{
+	Thr *t = (*pool)[i].front();
+	(*pool)[i].pop_front();
+	return t;
+}
 
 void Proc::process_thr()
 {
@@ -279,7 +287,7 @@ void Proc::process_thr()
 		}
 		default:
 		{
-			std::cout << "Error\n";
+			std::cout << "Mode Error\n";
 			exit(1);
 			break;
 		}
@@ -329,7 +337,9 @@ void Proc::stall_thr()
 	omp_set_lock(&((*dq_lock)[id]));
 	if((*pool)[id].empty() && count != 0)
 	{
+		std::cout << "time to work steal again\n";
 		dq_push_back(id, current);
+		exit(1);
 		work_steal();
 	}
 	else if(count != 0)
@@ -341,12 +351,11 @@ void Proc::stall_thr()
 	omp_unset_lock(&((*dq_lock)[id]));
 }
 
-void Proc::work_steal()
+bool Proc::work_steal()
 {
 	std::cout << id << " work stealing with count=" << count << "\n"; 
 	int vict;
-	bool flag = true;
-	while(count != 0 && flag)
+	while(count != 0)
 	{
 		vict = rand() % num_thr;
 		vict = (vict == num_thr ? (vict+1)%num_thr : vict);
@@ -354,11 +363,12 @@ void Proc::work_steal()
 		if(!(*pool)[vict].empty())
 		{
 			std::cout << id << " work stole\n"; 
-			current = dq_pop_back(vict);
-			flag = false;
+			current = dq_pop_front(vict);
+			return true;
 		}
 		omp_unset_lock(&((*dq_lock)[vict]));
-	} 
+	}
+	return false;
 }
 
 void Proc::synth(Exp *exp)
@@ -387,6 +397,7 @@ void Proc::synth(Exp *exp)
 			Thr *thr2 = spawn_thr(ex->getE2(), Mode(Mode_cl::Syn, Typ::None));
 			std::vector<Thr*> v = {thr1, thr2};
 			join_thr(v, Mode(Mode_cl::Plus, Typ::None));
+			sleep(1);
 			process_thr();
 			break;
 		}
@@ -433,8 +444,12 @@ int main(int argc, char **argv)
 		{
 			Exp *e1 = new Exp(Exp_cl::Int);
 			Exp *e2 = new Exp(Exp_cl::Int);
-			Exp *pl = new Plus(e1, e2);
-			Thr* thr = p.spawn_thr(pl, Mode(Mode_cl::Syn, Typ::None));
+			//Exp *e3 = new Exp(Exp_cl::Int);
+			//Exp *e4 = new Exp(Exp_cl::Int);
+			Exp *p1 = new Plus(e1, e2);
+			//Exp *p2 = new Plus(e3, e4);
+			//Exp *p3 = new Plus(p1, p2);
+			Thr* thr = p.spawn_thr(p1, Mode(Mode_cl::Syn, Typ::None));
 			began = true;
 			p.set_current(thr);
 			p.process_thr();
@@ -442,13 +457,15 @@ int main(int argc, char **argv)
 			std::cout << "Yabo\n";
 			printTyp(thr->getRes());
 			delete thr;
-			delete pl;
+			delete p1;
 		}
 		else
 		{
 			while(!began) {}
-			p.work_steal();
-			//p.process_thr();
+			if(p.work_steal())
+			{
+				p.process_thr();
+			}
 		}
 	}
 
