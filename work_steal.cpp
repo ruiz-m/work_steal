@@ -339,7 +339,6 @@ void Proc::stall_thr()
 	{
 		std::cout << "time to work steal again\n";
 		dq_push_back(id, current);
-		exit(1);
 		work_steal();
 	}
 	else if(count != 0)
@@ -351,19 +350,29 @@ void Proc::stall_thr()
 	omp_unset_lock(&((*dq_lock)[id]));
 }
 
+static int D = 0;
+
 bool Proc::work_steal()
 {
 	std::cout << id << " work stealing with count=" << count << "\n"; 
 	int vict;
+	++D;
 	while(count != 0)
 	{
 		vict = rand() % num_thr;
-		vict = (vict == num_thr ? (vict+1)%num_thr : vict);
+		vict = (vict == id ? (vict+1)%num_thr : vict);
+		std::cout << vict << " victim size=" << (*pool)[vict].size() << std::endl;
 		omp_set_lock(&((*dq_lock)[vict]));
+		std::cout << "deadlock\n";
 		if(!(*pool)[vict].empty())
 		{
 			std::cout << id << " work stole\n"; 
+			if(D == 2)
+			{
+				exit(1);
+			}
 			current = dq_pop_front(vict);
+			omp_unset_lock(&((*dq_lock)[vict]));
 			return true;
 		}
 		omp_unset_lock(&((*dq_lock)[vict]));
