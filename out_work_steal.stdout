@@ -1,13 +1,12 @@
 2
+1
 0
-process thr
+0 process thr
 Plus
 MODE SYN
 SYNTH
 SYNTH PLUS
-1process thr
-
-1 work stealing
+0 process thr
 Int
 MODE SYN
 SYNTH
@@ -16,7 +15,7 @@ End
 Int
 New current
 Int
-process thr
+0 process thr
 Int
 MODE SYN
 SYNTH
@@ -25,10 +24,9 @@ End
 Int
 New current
 Plus
-process thr
+0 process thr
 Plus
 MODE PLUS
-1 work stole
 End
 Plus
 deleting thr
@@ -37,3 +35,4 @@ Yabo
 Int
 deleting thr
 Deleting plus
+1 work stealing with count=0

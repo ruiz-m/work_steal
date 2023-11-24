@@ -208,10 +208,11 @@ class Proc
 	private:
 		int id;
 		std::vector<std::deque<Thr*>> *pool;
+		std::vector<omp_lock_t> *dq_lock;
 		Thr *current;
 
 	public:
-		Proc(int id, std::vector<std::deque<Thr*>> *pool) : id(id), pool(pool), current(nullptr) {}
+		Proc(int id, std::vector<std::deque<Thr*>> *pool, std::vector<omp_lock_t> *dq_lock) : id(id), pool(pool), dq_lock(dq_lock), current(nullptr) {}
 
 		void set_current(Thr *thr);
 		void dq_push_back(int i, Thr *thr);
@@ -247,7 +248,7 @@ Thr *Proc::dq_pop_back(int i)
 
 void Proc::process_thr()
 {
-	std::cout << "process thr\n";
+	std::cout << id << " process thr\n";
 	current->getExp()->printCl();
 	Mode m = current->getMode();
 
@@ -295,7 +296,7 @@ void Proc::join_thr(std::vector<Thr*> &v, Mode m)
 {
 	current->setDep(v);
 	current->setMode(m);
-	#pragma critical
+	#pragma omp critical
 	{
 		dq_push_back(id, current);
 		dq_push_back(id, v[1]);
@@ -328,7 +329,7 @@ void Proc::end_thr(Typ ty)
 void Proc::stall_thr()
 {
 	#pragma omp critical
-	{	
+	{
 		if((*pool)[id].empty() && count != 0)
 		{
 			dq_push_back(id, current);
@@ -345,22 +346,23 @@ void Proc::stall_thr()
 
 void Proc::work_steal()
 {
-	std::cout << id << " work stealing\n"; 
+	std::cout << id << " work stealing with count=" << count << "\n"; 
 	int vict;
-	do
+	bool flag = true;
+	while(count != 0 && flag)
 	{
 		vict = rand() % num_thr;
 		vict = (vict == num_thr ? (vict+1)%num_thr : vict);
-	} while((*pool)[vict].empty() && count != 0);
-	
-	if(count != 0)
-	{
 		#pragma omp critical
 		{
-			std::cout << id << " work stole\n"; 
-			//current = dq_pop_back(vict);
+			if((*pool)[vict].empty())
+			{
+				std::cout << id << " work stole\n"; 
+				//current = dq_pop_back(vict);
+				flag = false;
+			}
 		}
-	}
+	} 
 }
 
 void Proc::synth(Exp *exp)
@@ -415,6 +417,11 @@ int main(int argc, char **argv)
 {
 	num_thr = omp_get_max_threads();
 	std::vector<std::deque<Thr*>> pool(num_thr);
+	std::vector<omp_lock_t> dq_lock(num_thr);
+	for(int i=0; i<num_thr; ++i)
+	{
+		omp_init_lock(&dq_lock[i]);
+	}
 	std::cout << num_thr << "\n";
 	
 	bool began = false;
@@ -423,15 +430,15 @@ int main(int argc, char **argv)
 		int id = omp_get_thread_num();
 		std::cout << id << "\n";
 
-		Proc p = Proc(id, &pool);
+		Proc p = Proc(id, &pool, &dq_lock);
 		if(id == 0)
 		{
 			Exp *e1 = new Exp(Exp_cl::Int);
 			Exp *e2 = new Exp(Exp_cl::Int);
 			Exp *pl = new Plus(e1, e2);
 			Thr* thr = p.spawn_thr(pl, Mode(Mode_cl::Syn, Typ::None));
-			p.set_current(thr);
 			began = true;
+			p.set_current(thr);
 			p.process_thr();
 			
 			std::cout << "Yabo\n";
@@ -443,7 +450,13 @@ int main(int argc, char **argv)
 		{
 			while(!began) {}
 			p.work_steal();
+			//p.process_thr();
 		}
+	}
+
+	for(int i=0; i<num_thr; ++i)
+	{
+		omp_destroy_lock(&dq_lock[i]);
 	}
 	return 0;
 }
