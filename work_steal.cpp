@@ -280,7 +280,7 @@ void Proc::process_thr()
 		default:
 		{
 			std::cout << "Error\n";
-			//exit(1);
+			exit(1);
 			break;
 		}
 	}
@@ -296,11 +296,10 @@ void Proc::join_thr(std::vector<Thr*> &v, Mode m)
 {
 	current->setDep(v);
 	current->setMode(m);
-	#pragma omp critical
-	{
-		dq_push_back(id, current);
-		dq_push_back(id, v[1]);
-	}
+	omp_set_lock(&((*dq_lock)[id]));
+	dq_push_back(id, current);
+	dq_push_back(id, v[1]);
+	omp_unset_lock(&((*dq_lock)[id]));
 	current = v[0];
 }
 
@@ -311,37 +310,35 @@ void Proc::end_thr(Typ ty)
 	current->getExp()->printCl();
 	current->setRes(ty);
 	current->setDone(true);
-	#pragma omp critical
+	omp_set_lock(&((*dq_lock)[id]));
+	if((*pool)[id].empty() && count != 0)
 	{
-		if((*pool)[id].empty() && count != 0)
-		{
-			work_steal();
-		}
-		else if(count != 0)
-		{
-			current = dq_pop_back(id);
-			std::cout << "New current\n";
-			current->getExp()->printCl();
-		}
+		work_steal();
 	}
+	else if(count != 0)
+	{
+		current = dq_pop_back(id);
+		std::cout << "New current\n";
+		current->getExp()->printCl();
+	}
+	omp_unset_lock(&((*dq_lock)[id]));
 }
 
 void Proc::stall_thr()
 {
-	#pragma omp critical
+	omp_set_lock(&((*dq_lock)[id]));
+	if((*pool)[id].empty() && count != 0)
 	{
-		if((*pool)[id].empty() && count != 0)
-		{
-			dq_push_back(id, current);
-			work_steal();
-		}
-		else if(count != 0)
-		{
-			Thr *thr = dq_pop_back(id);
-			dq_push_back(id, current);
-			current = thr;
-		}
+		dq_push_back(id, current);
+		work_steal();
 	}
+	else if(count != 0)
+	{
+		Thr *thr = dq_pop_back(id);
+		dq_push_back(id, current);
+		current = thr;
+	}
+	omp_unset_lock(&((*dq_lock)[id]));
 }
 
 void Proc::work_steal()
@@ -353,15 +350,14 @@ void Proc::work_steal()
 	{
 		vict = rand() % num_thr;
 		vict = (vict == num_thr ? (vict+1)%num_thr : vict);
-		#pragma omp critical
+		omp_set_lock(&((*dq_lock)[vict]));
+		if(!(*pool)[vict].empty())
 		{
-			if((*pool)[vict].empty())
-			{
-				std::cout << id << " work stole\n"; 
-				//current = dq_pop_back(vict);
-				flag = false;
-			}
+			std::cout << id << " work stole\n"; 
+			current = dq_pop_back(vict);
+			flag = false;
 		}
+		omp_unset_lock(&((*dq_lock)[vict]));
 	} 
 }
 
@@ -395,9 +391,11 @@ void Proc::synth(Exp *exp)
 			break;
 		}
 		default:
+		{
 			std::cout << "Invalid expression\n";
-			//exit(1);
+			exit(1);
 			break;
+		}
 	}
 }
 

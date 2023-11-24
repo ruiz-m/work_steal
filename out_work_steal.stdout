@@ -1,14 +1,15 @@
 2
-1
 0
 0 process thr
 Plus
 MODE SYN
 SYNTH
 SYNTH PLUS
-0 process thr
+10 process thr
 Int
+
 MODE SYN
+1 work stealing with count=3
 SYNTH
 SYNTH END INT
 End
@@ -35,4 +36,3 @@ Yabo
 Int
 deleting thr
 Deleting plus
-1 work stealing with count=0
