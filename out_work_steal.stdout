@@ -1,67 +1,30 @@
 num_thr=2
 0
-0 process thr
+Plus
+MODE SYN
+1SYNTH
+
+1 work stole
 Plus
 MODE SYN
 SYNTH
-SYNTH PLUS
-1
-0 process thr
 Plus
-MODE SYN
-SYNTH
-SYNTH PLUS
-0 process thr
-Bool
-MODE SYN
-SYNTH
-End
-Bool
-0 New current
-Int
-0 process thr
-Int
-MODE SYN
-SYNTH
-SYNTH END INT
-End
-Int
-0 New current
-Plus
-0 process thr
 Plus
 MODE PLUS
-Dependency done
-Bool
-Int
-End
-Plus
-0 New current
-Plus
-0 process thr
-Plus
-MODE SYN
-SYNTH
-SYNTH PLUS
-0 process thr
 Int
 MODE SYN
 SYNTH
-SYNTH END INT
 End
 Int
 0 New current
 Int
-0 process thr
 Int
 MODE SYN
 SYNTH
-SYNTH END INT
 End
 Int
 0 New current
 Plus
-0 process thr
 Plus
 MODE PLUS
 Dependency done
@@ -71,24 +34,45 @@ End
 Plus
 0 New current
 Plus
-0 process thr
+deleting thr
+deleting thr
+Plus
+MODE SYN
+SYNTH
+Int
+MODE SYN
+SYNTH
+End
+Int
+0 New current
+Int
+Int
+MODE SYN
+SYNTH
+End
+Int
+0 New current
+Plus
 Plus
 MODE PLUS
 Dependency done
-None
+Int
+Int
+End
+Plus
+0 work stealing with count=1
+Dependency done
+Int
 Int
 End
 Plus
 Ending completely
-0 process thr
-deleting thr
-deleting thr
-deleting thr
 deleting thr
 deleting thr
 deleting thr
 Yabo
-None
+Int
+deleting thr
 deleting thr
 Deleting plus
 Deleting plus

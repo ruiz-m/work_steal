@@ -232,6 +232,7 @@ class Proc
 		void set_current(Thr *thr);
 		void dq_push_back(int i, Thr *thr);
 		Thr *dq_pop_back(int i);
+		Thr *dq_back(int i);
 		Thr *dq_pop_front(int i);
 		void process_thr();
 		Thr *spawn_thr(Exp *ex, Mode m);
@@ -261,6 +262,11 @@ Thr *Proc::dq_pop_back(int i)
 	return t;
 }
 
+Thr *Proc::dq_back(int i)
+{
+	return (*pool)[i].back();
+}
+
 Thr *Proc::dq_pop_front(int i)
 {
 	Thr *t = (*pool)[i].front();
@@ -272,54 +278,50 @@ static int D = 0;
 
 void Proc::process_thr()
 {
-	std::cout << id << " process thr\n";
-	/*if(D == 5)
+	while(count != 0)
 	{
-		exit(1);
-	}
-	++D;*/
-	if(count == 0)
-	{
-		return;
-	}
-	current->getExp()->printCl();
-	Mode m = current->getMode();
-
-	switch(m.cl)
-	{
-		case Mode_cl::Syn:
+		//std::cout << id << " process thr\n";
+		current->getExp()->printCl();
+		Mode m = current->getMode();
+		/*if(D == 7)
 		{
-			std::cout << "MODE SYN\n";
-			synth(current->getExp());
-			process_thr();
-			break;
-		}
-		case Mode_cl::Plus:
-		{
-			std::cout << "MODE PLUS\n";
-			std::vector<Thr*> dep = current->getDep();
-			if(dep[0]->getDone() && dep[1]->getDone())
-			{
-				std::cout << "Dependency done\n";
-				printTyp(dep[0]->getRes());
-				printTyp(dep[1]->getRes());
-				synth_plus(dep[0]->getRes(), dep[1]->getRes());
-				process_thr();
-				delete dep[0];
-				delete dep[1];
-			}
-			else
-			{
-				stall_thr();
-				process_thr();
-			}
-			break;
-		}
-		default:
-		{
-			std::cout << "Mode Error\n";
 			exit(1);
-			break;
+		}
+		++D;*/
+		switch(m.cl)
+		{
+			case Mode_cl::Syn:
+			{
+				std::cout << "MODE SYN\n";
+				synth(current->getExp());
+				break;
+			}
+			case Mode_cl::Plus:
+			{
+				std::cout << "MODE PLUS\n";
+				std::vector<Thr*> dep = current->getDep();
+				if(dep[0]->getDone() && dep[1]->getDone())
+				{
+					std::cout << "Dependency done\n";
+					printTyp(dep[0]->getRes());
+					printTyp(dep[1]->getRes());
+					synth_plus(dep[0]->getRes(), dep[1]->getRes());
+					delete dep[0];
+					delete dep[1];
+				}
+				else
+				{
+					std::cout << "Time to stall\n";
+					stall_thr();
+				}
+				break;
+			}
+			default:
+			{
+				std::cout << "Mode Error\n";
+				exit(1);
+				break;
+			}
 		}
 	}
 }
@@ -390,7 +392,7 @@ void Proc::stall_thr()
 		std::cout << "time to work steal again\n";
 		std::cout << id << " work stealing with count=" << count << "\n";
 		omp_unset_lock(&((*dq_lock)[id]));
-		while(count != 0 && current->depDone())
+		while(count != 0 && !current->depDone())
 		{
 			Thr *t = work_steal();
 			if(t != nullptr)
@@ -405,10 +407,23 @@ void Proc::stall_thr()
 	}
 	else
 	{
-		Thr *thr = dq_pop_back(id);
-		dq_push_back(id, current);
-		current = thr;
+		Thr *thr = dq_back(id);
 		omp_unset_lock(&((*dq_lock)[id]));
+		while(1)
+		{
+			if(thr->depDone())
+			{
+				omp_set_lock(&((*dq_lock)[id]));
+				dq_push_back(id, current);
+				omp_unset_lock(&((*dq_lock)[id]));
+				current = thr;
+				break;
+			}
+			if(current->depDone())
+			{
+				break;
+			}
+		}
 	}
 }
 
@@ -440,13 +455,13 @@ void Proc::synth(Exp *exp)
 		}
 		case Exp_cl::Int:
 		{
-			std::cout << "SYNTH END INT\n";
+			//std::cout << "SYNTH END INT\n";
 			end_thr(Typ::Int);
 			break;
 		}
 		case Exp_cl::Plus:
 		{
-			std::cout << "SYNTH PLUS\n";
+			//std::cout << "SYNTH PLUS\n";
 			Plus *ex = dynamic_cast<Plus*>(exp);
 			Thr *thr1 = spawn_thr(ex->getE1(), Mode(Mode_cl::Syn, Typ::None));
 			Thr *thr2 = spawn_thr(ex->getE2(), Mode(Mode_cl::Syn, Typ::None));
@@ -515,8 +530,8 @@ int main(int argc, char **argv)
 		}
 		else
 		{
-			/*while(!began) {}
-			while(count != 0 && !p.work_steal())
+			while(!began) {}
+			while(count != 0)
 			{
 				Thr *t = p.work_steal();
 				if(t != nullptr)
@@ -525,7 +540,7 @@ int main(int argc, char **argv)
 					break;
 				}
 			}
-			p.process_thr();*/
+			p.process_thr();
 		}
 	}
 
