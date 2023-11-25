@@ -44,6 +44,7 @@ void Exp::printCl()
 		default:
 			std::cout << "printCl Error\n";
 			exit(1);
+			break;
 	}
 }
 
@@ -98,6 +99,7 @@ void printTyp(Typ ty)
 		default:
 			std::cout << "printTyp Error\n";
 			exit(1);
+			break;
 	}
 }
 
@@ -139,6 +141,7 @@ class Thr
 		void setMode(Mode m);
 		void setDone(bool q);
 		bool getDone();
+		bool depDone();
 		void setRes(Typ ty);
 		Typ getRes();
 		std::vector<Thr*> &getDep();
@@ -201,6 +204,16 @@ bool Thr::depEmpty()
 	return dep.empty();
 }
 
+bool Thr::depDone()
+{
+	bool res = true;
+	for(int i=0; i<dep.size(); ++i)
+	{
+		res = res && dep[i]->getDone();
+	}
+	return res;
+}
+
 static int num_thr;
 static int count = 0;
 
@@ -257,8 +270,13 @@ Thr *Proc::dq_pop_front(int i)
 void Proc::process_thr()
 {
 	std::cout << id << " process thr\n";
+	if(count == 0)
+	{
+		return;
+	}
 	current->getExp()->printCl();
 	Mode m = current->getMode();
+
 
 	switch(m.cl)
 	{
@@ -274,6 +292,8 @@ void Proc::process_thr()
 			std::vector<Thr*> dep = current->getDep();
 			if(dep[0]->getDone() && dep[1]->getDone())
 			{
+				printTyp(dep[0]->getRes());
+				printTyp(dep[1]->getRes());
 				synth_plus(dep[0]->getRes(), dep[1]->getRes());
 				delete dep[0];
 				delete dep[1];
@@ -311,17 +331,20 @@ void Proc::join_thr(std::vector<Thr*> &v, Mode m)
 	current = v[0];
 }
 
+
+
 void Proc::end_thr(Typ ty)
-{
-	--count;
+{	
 	std::cout << "End\n";
-	current->getExp()->printCl();
+	current->getExp()->printCl();	
 	current->setRes(ty);
 	current->setDone(true);
+	--count;
 	omp_set_lock(&((*dq_lock)[id]));
 	if((*pool)[id].empty() && count != 0)
 	{
-		work_steal();
+		std::cout << id << " work stealing with count=" << count << "\n";
+		while(count != 0 && !work_steal()) {}
 	}
 	else if(count != 0)
 	{
@@ -338,8 +361,8 @@ void Proc::stall_thr()
 	if((*pool)[id].empty() && count != 0)
 	{
 		std::cout << "time to work steal again\n";
-		dq_push_back(id, current);
-		work_steal();
+		std::cout << id << " work stealing with count=" << count << "\n";
+		while(count != 0 && !current->depDone() && !work_steal()){}
 	}
 	else if(count != 0)
 	{
@@ -350,33 +373,24 @@ void Proc::stall_thr()
 	omp_unset_lock(&((*dq_lock)[id]));
 }
 
-static int D = 0;
-
 bool Proc::work_steal()
 {
-	std::cout << id << " work stealing with count=" << count << "\n"; 
-	int vict;
-	++D;
-	while(count != 0)
+	int vict = rand() % num_thr;
+	vict = (vict == id ? (vict+1)%num_thr : vict);
+	omp_set_lock(&((*dq_lock)[vict]));
+	if(!(*pool)[vict].empty())
 	{
-		vict = rand() % num_thr;
-		vict = (vict == id ? (vict+1)%num_thr : vict);
-		std::cout << vict << " victim size=" << (*pool)[vict].size() << std::endl;
-		omp_set_lock(&((*dq_lock)[vict]));
-		std::cout << "deadlock\n";
-		if(!(*pool)[vict].empty())
+		std::cout << id << " work stole\n"; 
+		if(current != nullptr && !current->getDone())
 		{
-			std::cout << id << " work stole\n"; 
-			if(D == 2)
-			{
-				exit(1);
-			}
-			current = dq_pop_front(vict);
-			omp_unset_lock(&((*dq_lock)[vict]));
-			return true;
+			dq_push_back(id, current);
 		}
+		current = dq_pop_front(vict);
+		current->getExp()->printCl();
 		omp_unset_lock(&((*dq_lock)[vict]));
+		return true;
 	}
+	omp_unset_lock(&((*dq_lock)[vict]));
 	return false;
 }
 
@@ -440,7 +454,7 @@ int main(int argc, char **argv)
 	{
 		omp_init_lock(&dq_lock[i]);
 	}
-	std::cout << num_thr << "\n";
+	std::cout << "num_thr=" << num_thr << "\n";
 	
 	bool began = false;
 	#pragma omp parallel shared(pool, began)
@@ -471,10 +485,8 @@ int main(int argc, char **argv)
 		else
 		{
 			while(!began) {}
-			if(p.work_steal())
-			{
-				p.process_thr();
-			}
+			while(count != 0 && !p.work_steal()){}
+			p.process_thr();
 		}
 	}
 

@@ -1,4 +1,4 @@
-2
+num_thr=2
 0
 0 process thr
 Plus
@@ -6,15 +6,48 @@ MODE SYN
 SYNTH
 SYNTH PLUS
 1
-1 work stealing with count=3
-0 victim size=2
-deadlock
 1 work stole
+Plus
 1 process thr
 Plus
 MODE PLUS
 time to work steal again
 1 work stealing with count=3
-0 victim size=1
-deadlock
 1 work stole
+Int
+1 process thr
+Int
+MODE SYN
+SYNTH
+SYNTH END INT
+End
+Int
+New current
+Plus
+1 process thr
+Plus
+MODE PLUS
+time to work steal again
+1 work stealing with count=2
+0 process thr
+Int
+MODE SYN
+SYNTH
+SYNTH END INT
+End
+Int
+0 work stealing with count=1
+1 process thr
+Plus
+MODE PLUS
+Int
+Int
+End
+Plus
+0deleting thr
+ process thr
+Yabo
+Int
+deleting thr
+Deleting plus
+deleting thr
