@@ -283,12 +283,12 @@ void Proc::process_thr()
 {
 	while(count != 0)
 	{
-		printf("%d process thr\n", id);
-		if(D == 500)
+		/*printf("%d process thr\n", id);
+		if(D == 81)
 		{
 			exit(1);
 		}
-		++D;
+		++D;*/
 		//current->getExp()->printCl();
 		Mode m = current->getMode();
 		switch(m.cl)
@@ -410,22 +410,22 @@ void Proc::stall_thr()
 	}
 	else
 	{
-		Thr *thr = dq_back(id);
-		omp_unset_lock(&((*dq_lock)[id]));
 		while(1)
 		{
+			Thr *thr = dq_back(id);
 			if(thr->depDone())
 			{
-				omp_set_lock(&((*dq_lock)[id]));
 				dq_push_back(id, current);
 				omp_unset_lock(&((*dq_lock)[id]));
 				current = thr;
 				break;
 			}
+			omp_unset_lock(&((*dq_lock)[id]));
 			if(current->depDone())
 			{
 				break;
 			}
+			omp_set_lock(&((*dq_lock)[id]));
 		}
 	}
 }
@@ -521,7 +521,7 @@ int main(int argc, char **argv)
 	//srand (time(NULL));
 	std::cout << "num_thr=" << num_thr << "\n";
 	
-	Exp *p1 = example_exp(4);
+	Exp *p1 = example_exp(5);
 	++count;
 	Thr *thr = new Thr(p1, Mode(Mode_cl::Syn, Typ::None));
 	#pragma omp parallel shared(pool)
@@ -530,13 +530,12 @@ int main(int argc, char **argv)
 
 		Proc p = Proc(id, &pool, &dq_lock);
 		if(id == 0)
-		{
-			
+		{	
 			auto start = std::chrono::high_resolution_clock::now();
 			p.set_current(thr);
 			p.process_thr();
 			auto finish = std::chrono::high_resolution_clock::now();
-			auto mil = std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count();
+			auto mil = std::chrono::duration<double, std::milli>(finish - start).count();
 			std::cout << "Time=" << mil << "\n";
 			std::cout << work_steal_count << "\n";
 			printTyp(thr->getRes());
