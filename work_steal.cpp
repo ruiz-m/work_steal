@@ -3,6 +3,8 @@
 #include <deque>
 #include <vector>
 #include <unistd.h>
+#include <chrono>
+#include <time.h>
 
 enum struct Exp_cl
 {
@@ -216,6 +218,7 @@ bool Thr::depDone()
 
 static int num_thr;
 static int count = 0;
+static int work_steal_count =  0;
 omp_lock_t count_lock;
 
 class Proc
@@ -280,14 +283,14 @@ void Proc::process_thr()
 {
 	while(count != 0)
 	{
-		//std::cout << id << " process thr\n";
-		//current->getExp()->printCl();
-		Mode m = current->getMode();
-		/*if(D == 7)
+		printf("%d process thr\n", id);
+		if(D == 500)
 		{
 			exit(1);
 		}
-		++D;*/
+		++D;
+		//current->getExp()->printCl();
+		Mode m = current->getMode();
 		switch(m.cl)
 		{
 			case Mode_cl::Syn:
@@ -437,6 +440,7 @@ Thr *Proc::work_steal()
 	{
 		//std::cout << id << " work stole\n"; 
 		t = dq_pop_front(vict);
+		++work_steal_count;
 		//t->getExp()->printCl();
 	}
 	omp_unset_lock(&((*dq_lock)[vict]));
@@ -490,6 +494,20 @@ void Proc::synth_plus(Typ ty1, Typ ty2)
 	}
 }
 
+Exp *example_exp(int d)
+{
+	if(d == 0)
+	{
+		return new Exp(Exp_cl::Int);
+	}
+	else
+	{
+		Exp *e1 = example_exp(d-1);
+		Exp *e2 = example_exp(d-1);
+		return new Plus(e1, e2);
+	}
+}
+
 int main(int argc, char **argv)
 {
 	num_thr = omp_get_max_threads();
@@ -500,37 +518,31 @@ int main(int argc, char **argv)
 		omp_init_lock(&dq_lock[i]);
 	}
 	omp_init_lock(&count_lock);
+	//srand (time(NULL));
 	std::cout << "num_thr=" << num_thr << "\n";
 	
-	bool began = false;
-	#pragma omp parallel shared(pool, began)
+	Exp *p1 = example_exp(4);
+	++count;
+	Thr *thr = new Thr(p1, Mode(Mode_cl::Syn, Typ::None));
+	#pragma omp parallel shared(pool)
 	{
 		int id = omp_get_thread_num();
-		std::cout << id << "\n";
 
 		Proc p = Proc(id, &pool, &dq_lock);
 		if(id == 0)
 		{
-			Exp *e1 = new Exp(Exp_cl::Int);
-			Exp *e2 = new Exp(Exp_cl::Int);
-			Exp *e3 = new Exp(Exp_cl::Int);
-			Exp *e4 = new Exp(Exp_cl::Int);
-			Exp *p3 = new Plus(e1, e2);
-			Exp *p2 = new Plus(e3, e4);
-			Exp *p1 = new Plus(p2, p3);
-			Thr* thr = p.spawn_thr(p1, Mode(Mode_cl::Syn, Typ::None));
-			began = true;
+			
+			auto start = std::chrono::high_resolution_clock::now();
 			p.set_current(thr);
 			p.process_thr();
-			
-			std::cout << "Yabo\n";
+			auto finish = std::chrono::high_resolution_clock::now();
+			auto mil = std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count();
+			std::cout << "Time=" << mil << "\n";
+			std::cout << work_steal_count << "\n";
 			printTyp(thr->getRes());
-			delete thr;
-			delete p1;
 		}
 		else
 		{
-			while(!began) {}
 			while(count != 0)
 			{
 				Thr *t = p.work_steal();
@@ -543,7 +555,9 @@ int main(int argc, char **argv)
 			p.process_thr();
 		}
 	}
-
+	
+	delete thr;
+	delete p1;
 	for(int i=0; i<num_thr; ++i)
 	{
 		omp_destroy_lock(&dq_lock[i]);

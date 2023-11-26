@@ -1,7 +1,56 @@
-num_thr=4
-0
-321
-
-
-Yabo
+num_thr=8
+0 process thr
+0 process thr
+4 process thr
+2 process thr
+3 process thr
+7 process thr
+6 process thr
+2 process thr
+2 process thr
+2 process thr
+2 process thr
+2 process thr
+2 process thr
+2 process thr
+2 process thr
+2 process thr
+2 process thr
+2 process thr
+2 process thr
+2 process thr
+2 process thr
+2 process thr
+4 process thr
+2 process thr
+7 process thr
+2 process thr
+2 process thr
+7 process thr
+2 process thr
+7 process thr
+7 process thr
+7 process thr
+4 process thr
+2 process thr
+7 process thr
+4 process thr
+7 process thr
+2 process thr
+2 process thr
+0 process thr
+0 process thr
+2 process thr
+0 process thr
+0 process thr
+7 process thr
+0 process thr
+7 process thr
+7 process thr
+7 process thr
+2 process thr
+3 process thr
+4 process thr
+Time=9
+10
 Int
