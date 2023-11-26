@@ -5,7 +5,7 @@
 #SBATCH --mail-type=NONE
 #SBATCH --job-name=work_steal
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=2
+#SBATCH --ntasks-per-node=4
 #SBATCH --time=00:05:00
 #SBATCH --account=eecs587f23_class
 #SBATCH --partition=standard

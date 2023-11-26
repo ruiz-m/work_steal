@@ -58,7 +58,7 @@ class Plus : public Exp
 		Plus(Exp *exp1, Exp *exp2) : Exp(Exp_cl::Plus), e1(exp1), e2(exp2) {}
 		~Plus()
 		{
-			std::cout << "Deleting plus\n";
+			//std::cout << "Deleting plus\n";
 			delete e1;
 			delete e2;
 		}
@@ -150,7 +150,7 @@ class Thr
 		void set(Thr &th);
 		~Thr()
 		{
-			std::cout << "deleting thr\n"; 
+			//std::cout << "deleting thr\n"; 
 		}
 };
 
@@ -281,7 +281,7 @@ void Proc::process_thr()
 	while(count != 0)
 	{
 		//std::cout << id << " process thr\n";
-		current->getExp()->printCl();
+		//current->getExp()->printCl();
 		Mode m = current->getMode();
 		/*if(D == 7)
 		{
@@ -292,26 +292,26 @@ void Proc::process_thr()
 		{
 			case Mode_cl::Syn:
 			{
-				std::cout << "MODE SYN\n";
+				//std::cout << "MODE SYN\n";
 				synth(current->getExp());
 				break;
 			}
 			case Mode_cl::Plus:
 			{
-				std::cout << "MODE PLUS\n";
+				//std::cout << "MODE PLUS\n";
 				std::vector<Thr*> dep = current->getDep();
 				if(dep[0]->getDone() && dep[1]->getDone())
 				{
-					std::cout << "Dependency done\n";
-					printTyp(dep[0]->getRes());
-					printTyp(dep[1]->getRes());
+					//std::cout << "Dependency done\n";
+					//printTyp(dep[0]->getRes());
+					//printTyp(dep[1]->getRes());
 					synth_plus(dep[0]->getRes(), dep[1]->getRes());
 					delete dep[0];
 					delete dep[1];
 				}
 				else
 				{
-					std::cout << "Time to stall\n";
+					//std::cout << "Time to stall\n";
 					stall_thr();
 				}
 				break;
@@ -347,15 +347,15 @@ void Proc::join_thr(std::vector<Thr*> &v, Mode m)
 
 void Proc::end_thr(Typ ty)
 {
-	std::cout << "End\n";
-	current->getExp()->printCl();
+	//std::cout << "End\n";
+	//current->getExp()->printCl();
 	current->setRes(ty);
 	current->setDone(true);
 	omp_set_lock(&count_lock);
 	--count;
 	if(count == 0)
 	{
-		std::cout << "Ending completely\n";
+		//std::cout << "Ending completely\n";
 		return;
 	}
 	omp_unset_lock(&count_lock);
@@ -363,7 +363,7 @@ void Proc::end_thr(Typ ty)
 	omp_set_lock(&((*dq_lock)[id]));
 	if((*pool)[id].empty())
 	{
-		std::cout << id << " work stealing with count=" << count << "\n";
+		//std::cout << id << " work stealing with count=" << count << "\n";
 		omp_unset_lock(&((*dq_lock)[id]));
 		while(count != 0) 
 		{
@@ -378,8 +378,8 @@ void Proc::end_thr(Typ ty)
 	else
 	{
 		current = dq_pop_back(id);
-		std::cout << id << " New current\n";
-		current->getExp()->printCl();
+		//std::cout << id << " New current\n";
+		//current->getExp()->printCl();
 		omp_unset_lock(&((*dq_lock)[id]));
 	}
 }
@@ -389,8 +389,8 @@ void Proc::stall_thr()
 	omp_set_lock(&((*dq_lock)[id]));
 	if((*pool)[id].empty())
 	{
-		std::cout << "time to work steal again\n";
-		std::cout << id << " work stealing with count=" << count << "\n";
+		//std::cout << "time to work steal again\n";
+		//std::cout << id << " work stealing with count=" << count << "\n";
 		omp_unset_lock(&((*dq_lock)[id]));
 		while(count != 0 && !current->depDone())
 		{
@@ -435,9 +435,9 @@ Thr *Proc::work_steal()
 	omp_set_lock(&((*dq_lock)[vict]));
 	if(!(*pool)[vict].empty())
 	{
-		std::cout << id << " work stole\n"; 
+		//std::cout << id << " work stole\n"; 
 		t = dq_pop_front(vict);
-		t->getExp()->printCl();
+		//t->getExp()->printCl();
 	}
 	omp_unset_lock(&((*dq_lock)[vict]));
 	return t;
@@ -445,7 +445,7 @@ Thr *Proc::work_steal()
 
 void Proc::synth(Exp *exp)
 {
-	std::cout << "SYNTH\n";
+	//std::cout << "SYNTH\n";
 	switch(exp->getCl())
 	{
 		case Exp_cl::Bool:
