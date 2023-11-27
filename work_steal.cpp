@@ -221,6 +221,14 @@ static int count = 0;
 static int work_steal_count =  0;
 omp_lock_t count_lock;
 
+int getCount()
+{
+	omp_set_lock(&count_lock);
+	int res = count;
+	omp_unset_lock(&count_lock);
+	return res;
+}
+
 class Proc
 {
 	private:
@@ -284,7 +292,7 @@ void Proc::process_thr()
 	while(count != 0)
 	{
 		/*printf("%d process thr\n", id);
-		if(D == 81)
+		if(D == 600)
 		{
 			exit(1);
 		}
@@ -350,15 +358,15 @@ void Proc::join_thr(std::vector<Thr*> &v, Mode m)
 
 void Proc::end_thr(Typ ty)
 {
-	//std::cout << "End\n";
-	//current->getExp()->printCl();
 	current->setRes(ty);
 	current->setDone(true);
 	omp_set_lock(&count_lock);
 	--count;
 	if(count == 0)
 	{
+		omp_unset_lock(&count_lock);
 		//std::cout << "Ending completely\n";
+		//exit(1);
 		return;
 	}
 	omp_unset_lock(&count_lock);
@@ -410,22 +418,31 @@ void Proc::stall_thr()
 	}
 	else
 	{
+		/*Thr *thr = dq_pop_back(id);
+		dq_push_back(id, current);
+		omp_unset_lock(&((*dq_lock)[id]));
+		current = thr;*/
+		omp_unset_lock(&((*dq_lock)[id]));
 		while(1)
 		{
-			Thr *thr = dq_back(id);
-			if(thr->depDone())
+			omp_set_lock(&((*dq_lock)[id]));
+			if(!(*pool)[id].empty())
 			{
-				dq_push_back(id, current);
-				omp_unset_lock(&((*dq_lock)[id]));
-				current = thr;
-				break;
+				Thr *thr = dq_back(id);
+				if(thr->depDone())
+				{
+					dq_pop_back(id);
+					dq_push_back(id, current);
+					omp_unset_lock(&((*dq_lock)[id]));
+					current = thr;
+					break;
+				}
 			}
 			omp_unset_lock(&((*dq_lock)[id]));
 			if(current->depDone())
 			{
 				break;
 			}
-			omp_set_lock(&((*dq_lock)[id]));
 		}
 	}
 }
@@ -521,7 +538,7 @@ int main(int argc, char **argv)
 	//srand (time(NULL));
 	std::cout << "num_thr=" << num_thr << "\n";
 	
-	Exp *p1 = example_exp(5);
+	Exp *p1 = example_exp(18);
 	++count;
 	Thr *thr = new Thr(p1, Mode(Mode_cl::Syn, Typ::None));
 	#pragma omp parallel shared(pool)
@@ -530,7 +547,7 @@ int main(int argc, char **argv)
 
 		Proc p = Proc(id, &pool, &dq_lock);
 		if(id == 0)
-		{	
+		{
 			auto start = std::chrono::high_resolution_clock::now();
 			p.set_current(thr);
 			p.process_thr();

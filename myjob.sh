@@ -6,6 +6,7 @@
 #SBATCH --job-name=work_steal
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=8
+#SBATCH --exclusive
 #SBATCH --time=00:05:00
 #SBATCH --account=eecs587f23_class
 #SBATCH --partition=standard
