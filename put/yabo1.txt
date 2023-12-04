@@ -1,0 +1,4 @@
+num_thr=8
+Time=44.8602
+0
+Int

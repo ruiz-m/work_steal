@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <chrono>
 #include <time.h>
+#include <thread>
 
 enum struct Exp_cl
 {
@@ -291,31 +292,19 @@ void Proc::process_thr()
 {
 	while(count != 0)
 	{
-		/*printf("%d process thr\n", id);
-		if(D == 600)
-		{
-			exit(1);
-		}
-		++D;*/
-		//current->getExp()->printCl();
 		Mode m = current->getMode();
 		switch(m.cl)
 		{
 			case Mode_cl::Syn:
 			{
-				//std::cout << "MODE SYN\n";
 				synth(current->getExp());
 				break;
 			}
 			case Mode_cl::Plus:
 			{
-				//std::cout << "MODE PLUS\n";
 				std::vector<Thr*> dep = current->getDep();
 				if(dep[0]->getDone() && dep[1]->getDone())
 				{
-					//std::cout << "Dependency done\n";
-					//printTyp(dep[0]->getRes());
-					//printTyp(dep[1]->getRes());
 					synth_plus(dep[0]->getRes(), dep[1]->getRes());
 					delete dep[0];
 					delete dep[1];
@@ -350,23 +339,22 @@ void Proc::join_thr(std::vector<Thr*> &v, Mode m)
 	current->setDep(v);
 	current->setMode(m);
 	omp_set_lock(&((*dq_lock)[id]));
-	dq_push_back(id, current);
 	dq_push_back(id, v[1]);
+	dq_push_back(id, v[0]);	
 	omp_unset_lock(&((*dq_lock)[id]));
-	current = v[0];
 }
 
 void Proc::end_thr(Typ ty)
 {
 	current->setRes(ty);
 	current->setDone(true);
+	//printf("%d = %x\n", id, &((*dq_lock)[id]));
+	
 	omp_set_lock(&count_lock);
 	--count;
 	if(count == 0)
 	{
 		omp_unset_lock(&count_lock);
-		//std::cout << "Ending completely\n";
-		//exit(1);
 		return;
 	}
 	omp_unset_lock(&count_lock);
@@ -378,12 +366,17 @@ void Proc::end_thr(Typ ty)
 		omp_unset_lock(&((*dq_lock)[id]));
 		while(count != 0) 
 		{
-			Thr *t = work_steal();
-			if(t != nullptr)
+			//work steal
+			int vict = rand() % num_thr;
+			omp_set_lock(&((*dq_lock)[vict]));
+			if(!(*pool)[vict].empty())
 			{
-				current = t;
+				current = dq_pop_front(vict);
+				omp_unset_lock(&((*dq_lock)[vict]));
+				++work_steal_count;
 				break;
 			}
+			omp_unset_lock(&((*dq_lock)[vict]));
 		}
 	}
 	else
@@ -400,20 +393,21 @@ void Proc::stall_thr()
 	omp_set_lock(&((*dq_lock)[id]));
 	if((*pool)[id].empty())
 	{
-		//std::cout << "time to work steal again\n";
-		//std::cout << id << " work stealing with count=" << count << "\n";
 		omp_unset_lock(&((*dq_lock)[id]));
 		while(count != 0 && !current->depDone())
 		{
-			Thr *t = work_steal();
-			if(t != nullptr)
+			//work steal
+			int vict = rand() % num_thr;
+			omp_set_lock(&((*dq_lock)[vict]));
+			if(!(*pool)[vict].empty())
 			{
-				omp_set_lock(&((*dq_lock)[id]));
 				dq_push_back(id, current);
-				current = t;
-				omp_unset_lock(&((*dq_lock)[id]));
+				current = dq_pop_front(vict);
+				omp_unset_lock(&((*dq_lock)[vict]));
+				++work_steal_count;
 				break;
 			}
+			omp_unset_lock(&((*dq_lock)[vict]));
 		}
 	}
 	else
@@ -451,11 +445,11 @@ Thr *Proc::work_steal()
 {
 	Thr *t = nullptr;
 	int vict = rand() % num_thr;
-	vict = (vict == id ? (vict+1)%num_thr : vict);
+	//vict = (vict == id ? (vict+1)%num_thr : vict);
 	omp_set_lock(&((*dq_lock)[vict]));
 	if(!(*pool)[vict].empty())
 	{
-		//std::cout << id << " work stole\n"; 
+		//printf("%d stole %d\n", id, vict);
 		t = dq_pop_front(vict);
 		++work_steal_count;
 		//t->getExp()->printCl();
@@ -466,7 +460,6 @@ Thr *Proc::work_steal()
 
 void Proc::synth(Exp *exp)
 {
-	//std::cout << "SYNTH\n";
 	switch(exp->getCl())
 	{
 		case Exp_cl::Bool:
@@ -513,7 +506,7 @@ void Proc::synth_plus(Typ ty1, Typ ty2)
 
 Exp *example_exp(int d)
 {
-	if(d == 0)
+	if(d == 1)
 	{
 		return new Exp(Exp_cl::Int);
 	}
@@ -535,13 +528,14 @@ int main(int argc, char **argv)
 		omp_init_lock(&dq_lock[i]);
 	}
 	omp_init_lock(&count_lock);
-	//srand (time(NULL));
+	srand(time(NULL));
 	std::cout << "num_thr=" << num_thr << "\n";
 	
-	Exp *p1 = example_exp(18);
+	Exp *p1 = example_exp(20);
 	++count;
 	Thr *thr = new Thr(p1, Mode(Mode_cl::Syn, Typ::None));
-	#pragma omp parallel shared(pool)
+	bool sk = true;
+	#pragma omp parallel shared(pool, dq_lock)
 	{
 		int id = omp_get_thread_num();
 
@@ -559,16 +553,37 @@ int main(int argc, char **argv)
 		}
 		else
 		{
-			while(count != 0)
+			while(sk)
 			{
-				Thr *t = p.work_steal();
-				if(t != nullptr)
+				omp_set_lock(&(dq_lock[0]));
+				if(!pool[0].empty())
 				{
-					p.set_current(t);
+					p.set_current(p.dq_pop_front(0));
+					++work_steal_count;
+					sk = false;
+					omp_unset_lock(&(dq_lock[0]));
+					p.process_thr();
 					break;
 				}
+				omp_unset_lock(&(dq_lock[0]));
 			}
-			p.process_thr();
+
+			while(count != 0)
+			{
+				int vict = rand() % num_thr;
+				omp_set_lock(&(dq_lock[vict]));
+				if(!pool[vict].empty())
+				{
+					//printf("%d stole %d\n", id, vict);
+					//printf("SIZE=%d\n", pool.size());
+					p.set_current(p.dq_pop_front(vict));
+					omp_unset_lock(&(dq_lock[vict]));
+					++work_steal_count;
+					p.process_thr();
+					break;
+				}
+				omp_unset_lock(&(dq_lock[vict]));
+			}
 		}
 	}
 	
